@@ -230,7 +230,7 @@ const ChannelSelector = ({ channels, activeChannel, onSelect, onAdd, onRemove })
 
 const VideoBar = ({ video, maxViews, isHovered, onHover }) => {
   const barWidth = Math.max((video.views / maxViews) * 100, 5);
-  
+
   return (
     <a
       href={video.link}
@@ -245,22 +245,27 @@ const VideoBar = ({ video, maxViews, isHovered, onHover }) => {
       <div className="w-14 text-[10px] text-gray-500 font-mono flex-shrink-0">
         {new Date(video.published).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
       </div>
-      
+
       <div className="flex-1 h-7 bg-white/5 rounded overflow-hidden relative">
+        {/* Title overlay - always visible */}
+        <div className="absolute inset-0 flex items-center pl-3 z-10">
+          <span className={`text-[11px] font-medium truncate transition-colors ${
+            isHovered ? 'text-white' : 'text-gray-300'
+          }`}>
+            {video.title.length > 50 ? video.title.slice(0, 50) + '...' : video.title}
+          </span>
+        </div>
+        {/* Progress bar */}
         <div
-          className={`h-full rounded flex items-center pl-3 transition-all duration-500 ${
+          className={`h-full rounded transition-all duration-500 opacity-40 ${
             video.type === 'short'
               ? 'bg-gradient-to-r from-accent-cyan to-accent-green'
               : 'bg-gradient-to-r from-youtube-red to-youtube-lightred'
           }`}
-          style={{ width: `${barWidth}%`, minWidth: '40px' }}
-        >
-          <span className="text-[10px] font-semibold text-black truncate max-w-[90%]">
-            {video.title.length > 45 ? video.title.slice(0, 45) + '...' : video.title}
-          </span>
-        </div>
+          style={{ width: `${barWidth}%` }}
+        />
       </div>
-      
+
       <div className={`w-20 text-right text-sm font-semibold font-mono transition-colors ${
         isHovered ? 'text-white' : 'text-gray-500'
       }`}>
