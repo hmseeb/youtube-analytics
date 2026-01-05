@@ -283,7 +283,11 @@ const VideoBar = ({ video, maxViews, isHovered, onHover }) => {
 // ============================================
 
 const STORAGE_KEY = 'youtube-analytics-channels';
-const DEFAULT_CHANNEL = 'UC6HBmXVAtwRBkZuaV9Jsubw';
+const DEFAULT_CHANNELS = [
+  'UC6HBmXVAtwRBkZuaV9Jsubw',
+  'UCcxQOPeGruITLHd2knOa3eA',
+  'UCuysQYjoOTAcZZPb0-_rCpA'
+];
 
 const loadStoredChannels = () => {
   try {
@@ -297,7 +301,7 @@ const loadStoredChannels = () => {
   } catch (e) {
     console.error('Failed to load stored channels:', e);
   }
-  return [{ id: DEFAULT_CHANNEL, name: 'Loading...', videos: [] }];
+  return DEFAULT_CHANNELS.map(id => ({ id, name: 'Loading...', videos: [] }));
 };
 
 const saveChannelsToStorage = (channelIds) => {
@@ -312,7 +316,7 @@ function App() {
   const [channels, setChannels] = useState(loadStoredChannels);
   const [activeChannelId, setActiveChannelId] = useState(() => {
     const stored = loadStoredChannels();
-    return stored[0]?.id || DEFAULT_CHANNEL;
+    return stored[0]?.id || DEFAULT_CHANNELS[0];
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
