@@ -483,11 +483,37 @@ function App() {
         {!loading && videos.length > 0 && (
           <>
             {/* Channel Name */}
-            <div className="mb-8 p-5 bg-white/[0.03] border border-white/[0.08] rounded-2xl animate-slide-in">
-              <h2 className="text-2xl font-semibold">{activeChannel?.name}</h2>
-              <p className="text-sm text-gray-500 font-mono mt-2">
-                Last {videos.length} videos • ID: {activeChannelId}
-              </p>
+            <div className="mb-8 p-5 bg-white/[0.03] border border-white/[0.08] rounded-2xl animate-slide-in flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-semibold">{activeChannel?.name}</h2>
+                <p className="text-sm text-gray-500 font-mono mt-2">
+                  Last {videos.length} videos • ID: {activeChannelId}
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <a
+                  href={`https://studio.youtube.com/channel/${activeChannelId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-all flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 12H9.5v-2h-2v2H6V9h1.5v2.5h2V9H11v6zm2-6h4c.55 0 1 .45 1 1v4c0 .55-.45 1-1 1h-4V9zm1.5 4.5h2v-3h-2v3z"/>
+                  </svg>
+                  View Insights
+                </a>
+                <a
+                  href={`https://www.youtube.com/channel/${activeChannelId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-youtube-red/20 border border-youtube-red/30 rounded-lg text-sm text-youtube-red hover:bg-youtube-red/30 transition-all flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 4-8 4z"/>
+                  </svg>
+                  View Channel
+                </a>
+              </div>
             </div>
 
             {/* Stats Grid */}
