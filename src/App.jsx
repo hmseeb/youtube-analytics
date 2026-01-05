@@ -261,12 +261,18 @@ const VideoBar = ({ video, maxViews, isHovered, onHover }) => {
         </div>
       </div>
       
-      <div className={`w-16 text-right text-sm font-semibold font-mono transition-colors ${
+      <div className={`w-20 text-right text-sm font-semibold font-mono transition-colors ${
         isHovered ? 'text-white' : 'text-gray-500'
       }`}>
         {video.views.toLocaleString()}
       </div>
-      
+
+      <div className={`w-16 text-right text-sm font-mono transition-colors ${
+        isHovered ? 'text-youtube-red' : 'text-gray-600'
+      }`}>
+        ❤️ {video.likes.toLocaleString()}
+      </div>
+
       <div className={`w-14 text-[10px] px-2 py-1 rounded-full text-center uppercase font-semibold ${
         video.type === 'short'
           ? 'bg-accent-cyan/20 text-accent-cyan'
@@ -542,6 +548,9 @@ function App() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-medium truncate">{video.title}</div>
+                    </div>
+                    <div className="text-xs text-gray-500 font-mono">
+                      ❤️ {video.likes.toLocaleString()}
                     </div>
                     <div className="text-sm font-semibold text-accent-cyan font-mono">
                       {video.views.toLocaleString()}
