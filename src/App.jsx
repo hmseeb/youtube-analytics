@@ -1,4 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+// ============================================
+// SUPABASE CLIENT
+// ============================================
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 // ============================================
 // UTILITY FUNCTIONS
@@ -231,6 +240,23 @@ const ChannelSelector = ({ channels, activeChannel, onSelect, onAdd, onRemove })
 const VideoBar = ({ video, maxViews, isHovered, onHover }) => {
   const barWidth = Math.max((video.views / maxViews) * 100, 5);
 
+  // Format relative time for last updated
+  const getRelativeTime = (dateStr) => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffDays > 7) return null; // Don't show if older than a week
+    if (diffDays > 0) return `${diffDays}d ago`;
+    if (diffHours > 0) return `${diffHours}h ago`;
+    return 'just now';
+  };
+
+  const lastUpdatedText = getRelativeTime(video.lastUpdated);
+
   return (
     <a
       href={video.link}
@@ -285,6 +311,13 @@ const VideoBar = ({ video, maxViews, isHovered, onHover }) => {
       }`}>
         {video.type}
       </div>
+
+      {/* Last updated indicator - only show if recent */}
+      {lastUpdatedText && (
+        <div className="w-12 text-[9px] text-gray-600 font-mono text-right" title={`Stats updated: ${new Date(video.lastUpdated).toLocaleString()}`}>
+          {lastUpdatedText}
+        </div>
+      )}
     </a>
   );
 };
@@ -333,6 +366,12 @@ function App() {
   const [error, setError] = useState(null);
   const [hoveredVideo, setHoveredVideo] = useState(null);
 
+  // Pagination state for Supabase
+  const [videosPerPage] = useState(30);
+  const [loadedPages, setLoadedPages] = useState({});  // { channelId: pageCount }
+  const [hasMore, setHasMore] = useState({});          // { channelId: boolean }
+  const [lastUpdated, setLastUpdated] = useState(null); // Last refresh timestamp
+
   // Save channel IDs to localStorage whenever channels change
   useEffect(() => {
     const channelIds = channels.map(ch => ch.id);
@@ -351,22 +390,165 @@ function App() {
     return parseYouTubeRSS(xmlText, channelId);
   };
 
-  const loadChannel = async (channelId) => {
+  const loadChannel = async (channelId, page = 0) => {
     setLoading(true);
     setError(null);
-    
+
     try {
+      // If Supabase is configured, try loading from there first
+      if (supabase) {
+        // Fetch channel info
+        const { data: channelData } = await supabase
+          .from('channels')
+          .select('*')
+          .eq('id', channelId)
+          .single();
+
+        // Fetch videos with pagination
+        const from = page * videosPerPage;
+        const to = from + videosPerPage - 1;
+
+        const { data: videos, error: videosError } = await supabase
+          .from('videos')
+          .select('*')
+          .eq('channel_id', channelId)
+          .order('published_at', { ascending: false })
+          .range(from, to);
+
+        if (videosError) throw videosError;
+
+        // Check if there are more videos
+        const { count } = await supabase
+          .from('videos')
+          .select('*', { count: 'exact', head: true })
+          .eq('channel_id', channelId);
+
+        setHasMore(prev => ({
+          ...prev,
+          [channelId]: (from + (videos?.length || 0)) < (count || 0)
+        }));
+
+        if (channelData && videos && videos.length > 0) {
+          // Update channel state with Supabase data
+          setChannels(prev => prev.map(ch => {
+            if (ch.id === channelId) {
+              const existingVideos = page === 0 ? [] : ch.videos;
+              return {
+                ...ch,
+                name: channelData?.name || ch.name,
+                videos: [...existingVideos, ...videos.map(v => ({
+                  id: v.id,
+                  title: v.title,
+                  description: v.description,
+                  published: v.published_at,
+                  thumbnail: v.thumbnail,
+                  views: v.views,
+                  likes: v.likes,
+                  type: v.type,
+                  link: v.link,
+                  lastUpdated: v.last_updated
+                }))]
+              };
+            }
+            return ch;
+          }));
+
+          setLoadedPages(prev => ({ ...prev, [channelId]: page + 1 }));
+          setLastUpdated(channelData?.last_fetched);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fallback to RSS if Supabase is not configured or has no data
       const data = await fetchChannelData(channelId);
-      setChannels(prev => prev.map(ch => 
-        ch.id === channelId 
+      setChannels(prev => prev.map(ch =>
+        ch.id === channelId
           ? { ...ch, name: data.channelName, videos: data.videos }
           : ch
       ));
+      setHasMore(prev => ({ ...prev, [channelId]: false }));
     } catch (err) {
-      setError(`Failed to load channel: ${err.message}`);
+      // If Supabase fails, try RSS as fallback
+      try {
+        const data = await fetchChannelData(channelId);
+        setChannels(prev => prev.map(ch =>
+          ch.id === channelId
+            ? { ...ch, name: data.channelName, videos: data.videos }
+            : ch
+        ));
+        setHasMore(prev => ({ ...prev, [channelId]: false }));
+      } catch (rssErr) {
+        setError(`Failed to load channel: ${rssErr.message}`);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  // Refresh channel from live RSS and save to Supabase
+  const refreshChannel = async (channelId) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Fetch fresh RSS data via existing proxy
+      const response = await fetch(`/api/feed?channelId=${channelId}`);
+      if (!response.ok) throw new Error('Failed to fetch RSS');
+
+      const xml = await response.text();
+      const parsed = parseYouTubeRSS(xml, channelId);
+
+      if (supabase) {
+        // Upsert channel to Supabase
+        await supabase.from('channels').upsert({
+          id: channelId,
+          name: parsed.channelName,
+          last_fetched: new Date().toISOString()
+        });
+
+        // Upsert videos to Supabase
+        const videosToUpsert = parsed.videos.map(v => ({
+          id: v.id,
+          channel_id: channelId,
+          title: v.title,
+          description: v.description,
+          published_at: v.published,
+          thumbnail: v.thumbnail,
+          link: v.link,
+          type: v.type,
+          views: v.views,
+          likes: v.likes,
+          last_updated: new Date().toISOString()
+        }));
+
+        await supabase.from('videos').upsert(videosToUpsert);
+
+        // Reload from Supabase to get merged data
+        setLoadedPages(prev => ({ ...prev, [channelId]: 0 }));
+        await loadChannel(channelId, 0);
+      } else {
+        // No Supabase, just update state with RSS data
+        setChannels(prev => prev.map(ch =>
+          ch.id === channelId
+            ? { ...ch, name: parsed.channelName, videos: parsed.videos }
+            : ch
+        ));
+      }
+
+      setLastUpdated(new Date().toISOString());
+    } catch (err) {
+      console.error('Refresh failed:', err);
+      setError(`Refresh failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load more videos (pagination)
+  const loadMoreVideos = () => {
+    const currentPage = loadedPages[activeChannelId] || 1;
+    loadChannel(activeChannelId, currentPage);
   };
 
   const addChannel = async (channelId) => {
@@ -518,8 +700,25 @@ function App() {
                   </svg>
                   View Channel
                 </a>
+                <button
+                  onClick={() => refreshChannel(activeChannelId)}
+                  disabled={loading}
+                  className="px-4 py-2 bg-accent-cyan/20 border border-accent-cyan/30 rounded-lg text-sm text-accent-cyan hover:bg-accent-cyan/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={loading ? 'animate-spin' : ''}>
+                    <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                  </svg>
+                  {loading ? 'Refreshing...' : 'Refresh Now'}
+                </button>
               </div>
             </div>
+
+            {/* Last Updated Indicator */}
+            {lastUpdated && (
+              <div className="mb-4 text-xs text-gray-500 font-mono">
+                Last synced: {new Date(lastUpdated).toLocaleString()}
+              </div>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-5 gap-4 mb-10">
@@ -594,10 +793,10 @@ function App() {
             {/* Video Performance Chart */}
             <div className="bg-white/[0.03] border border-white/[0.08] rounded-2xl p-6 mb-10 animate-slide-in delay-700">
               <h3 className="text-sm text-gray-500 font-medium uppercase tracking-wider mb-5">
-                📊 Recent Videos Performance
+                📊 Videos Performance ({videos.length} videos)
               </h3>
               <div className="flex flex-col gap-2">
-                {videos.slice(0, 15).map((video) => (
+                {videos.map((video) => (
                   <VideoBar
                     key={video.id}
                     video={video}
@@ -607,6 +806,29 @@ function App() {
                   />
                 ))}
               </div>
+
+              {/* Load More Button */}
+              {hasMore[activeChannelId] && (
+                <button
+                  onClick={loadMoreVideos}
+                  disabled={loading}
+                  className="w-full py-3 mt-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-gray-400 hover:text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+                      </svg>
+                      Load More Videos
+                    </>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Insight Footer */}

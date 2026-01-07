@@ -1,0 +1,217 @@
+{
+  "name": "YouTube RSS to Supabase",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [-1400, 0],
+      "typeVersion": 1.2,
+      "id": "schedule-1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "channel1",
+              "name": "channels",
+              "value": "=[\"UC6HBmXVAtwRBkZuaV9Jsubw\", \"UCcxQOPeGruITLHd2knOa3eA\", \"UCuysQYjoOTAcZZPb0-_rCpA\"]",
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "name": "Set Channel IDs",
+      "type": "n8n-nodes-base.set",
+      "position": [-1200, 0],
+      "typeVersion": 3.4,
+      "id": "set-channels"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "channels",
+        "options": {}
+      },
+      "name": "Loop Channels",
+      "type": "n8n-nodes-base.splitOut",
+      "position": [-1000, 0],
+      "typeVersion": 1,
+      "id": "split-channels"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.youtube.com/feeds/videos.xml?channel_id={{ $json.channels }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "name": "Fetch RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [-800, 0],
+      "typeVersion": 4.1,
+      "id": "fetch-rss"
+    },
+    {
+      "parameters": {
+        "jsCode": "const xml = $input.first().json.data;\nconst channelIdMatch = $input.first().json.url?.match(/channel_id=([^&]+)/);\nconst channelId = channelIdMatch ? channelIdMatch[1] : '';\n\n// Parse XML manually\nconst getTagContent = (xml, tag) => {\n  const regex = new RegExp(`<${tag}[^>]*>([\\\\s\\\\S]*?)</${tag}>`, 'g');\n  const matches = [];\n  let match;\n  while ((match = regex.exec(xml)) !== null) {\n    matches.push(match[1]);\n  }\n  return matches;\n};\n\nconst getAttr = (xml, tag, attr) => {\n  const regex = new RegExp(`<${tag}[^>]*${attr}=\"([^\"]*)\"`, 'i');\n  const match = xml.match(regex);\n  return match ? match[1] : '';\n};\n\n// Get channel name\nconst channelName = getTagContent(xml, 'title')[0] || 'Unknown Channel';\n\n// Get all entries\nconst entryRegex = /<entry>([\\s\\S]*?)<\\/entry>/g;\nconst entries = [];\nlet entryMatch;\nwhile ((entryMatch = entryRegex.exec(xml)) !== null) {\n  entries.push(entryMatch[1]);\n}\n\nconst results = [];\n\nfor (const entry of entries) {\n  const videoId = getTagContent(entry, 'yt:videoId')[0] || '';\n  const title = getTagContent(entry, 'title')[0] || '';\n  const published = getTagContent(entry, 'published')[0] || '';\n  const description = getTagContent(entry, 'media:description')[0] || '';\n  const thumbnail = getAttr(entry, 'media:thumbnail', 'url') || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;\n  const views = parseInt(getAttr(entry, 'media:statistics', 'views') || '0');\n  const likes = parseInt(getAttr(entry, 'media:starRating', 'count') || '0');\n  \n  const link = `https://www.youtube.com/watch?v=${videoId}`;\n  const isShort = title.includes('#') || description.length < 100;\n  \n  results.push({\n    json: {\n      id: videoId,\n      channel_id: channelId,\n      channel_name: channelName,\n      title: title,\n      description: description.substring(0, 1000),\n      published_at: published,\n      thumbnail: thumbnail,\n      link: link,\n      type: isShort ? 'short' : 'video',\n      views: views,\n      likes: likes,\n      last_updated: new Date().toISOString()\n    }\n  });\n}\n\nreturn results;"
+      },
+      "name": "Parse RSS XML",
+      "type": "n8n-nodes-base.code",
+      "position": [-600, 0],
+      "typeVersion": 2,
+      "id": "parse-xml"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dympovegcungbsokjxmy.supabase.co/rest/v1/channels",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5bXBvdmVnY3VuZ2Jzb2tqeG15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODQyMjUsImV4cCI6MjA4MzM2MDIyNX0.JrQzgEKu-5YrqxR7wxKuwmIauiRBjIgvBT_cWwrwgbQ"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5bXBvdmVnY3VuZ2Jzb2tqeG15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODQyMjUsImV4cCI6MjA4MzM2MDIyNX0.JrQzgEKu-5YrqxR7wxKuwmIauiRBjIgvBT_cWwrwgbQ"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ id: $json.channel_id, name: $json.channel_name, last_fetched: new Date().toISOString() }) }}",
+        "options": {}
+      },
+      "name": "Upsert Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [-400, -100],
+      "typeVersion": 4.1,
+      "id": "upsert-channel"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dympovegcungbsokjxmy.supabase.co/rest/v1/videos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5bXBvdmVnY3VuZ2Jzb2tqeG15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODQyMjUsImV4cCI6MjA4MzM2MDIyNX0.JrQzgEKu-5YrqxR7wxKuwmIauiRBjIgvBT_cWwrwgbQ"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5bXBvdmVnY3VuZ2Jzb2tqeG15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODQyMjUsImV4cCI6MjA4MzM2MDIyNX0.JrQzgEKu-5YrqxR7wxKuwmIauiRBjIgvBT_cWwrwgbQ"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ id: $json.id, channel_id: $json.channel_id, title: $json.title, description: $json.description, published_at: $json.published_at, thumbnail: $json.thumbnail, link: $json.link, type: $json.type, views: $json.views, likes: $json.likes, last_updated: $json.last_updated }) }}",
+        "options": {}
+      },
+      "name": "Upsert Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [-400, 100],
+      "typeVersion": 4.1,
+      "id": "upsert-video"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Channel IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Channel IDs": {
+      "main": [
+        [
+          {
+            "node": "Loop Channels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Channels": {
+      "main": [
+        [
+          {
+            "node": "Fetch RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RSS": {
+      "main": [
+        [
+          {
+            "node": "Parse RSS XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse RSS XML": {
+      "main": [
+        [
+          {
+            "node": "Upsert Channel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upsert Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
