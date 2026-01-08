@@ -436,13 +436,16 @@ function App() {
     return { startDate: start, endDate: end };
   };
 
-  const loadChannel = async (channelId, page = 0) => {
+  const loadChannel = async (channelId, page = 0, channelFilters = null) => {
     setLoading(true);
     setError(null);
 
     try {
       // If Supabase is configured, try loading from there first
       if (supabase) {
+        // Get active filters for this channel
+        const activeFilters = channelFilters || getActiveFilters(channelId);
+
         // Fetch channel info
         const { data: channelData } = await supabase
           .from('channels')
@@ -454,20 +457,69 @@ function App() {
         const from = page * videosPerPage;
         const to = from + videosPerPage - 1;
 
-        const { data: videos, error: videosError } = await supabase
+        // Build base query
+        let query = supabase
           .from('videos')
           .select('*')
-          .eq('channel_id', channelId)
+          .eq('channel_id', channelId);
+
+        // Apply date range filter
+        const dateRange = calculateDateRange(activeFilters.dateRange);
+        if (dateRange) {
+          if (dateRange.startDate) {
+            query = query.gte('published_at', new Date(dateRange.startDate).toISOString());
+          }
+          if (dateRange.endDate) {
+            query = query.lte('published_at', new Date(dateRange.endDate).toISOString());
+          }
+        }
+
+        // Apply search query filter (case-insensitive search in title and description)
+        if (activeFilters.searchQuery && activeFilters.searchQuery.trim()) {
+          const searchTerm = `%${activeFilters.searchQuery.trim()}%`;
+          query = query.or(`title.ilike.${searchTerm},description.ilike.${searchTerm}`);
+        }
+
+        // Apply type filter
+        if (activeFilters.typeFilter && activeFilters.typeFilter !== 'all') {
+          query = query.eq('type', activeFilters.typeFilter);
+        }
+
+        // Apply ordering and pagination
+        query = query
           .order('published_at', { ascending: false })
           .range(from, to);
 
+        const { data: videos, error: videosError } = await query;
+
         if (videosError) throw videosError;
 
-        // Check if there are more videos
-        const { count } = await supabase
+        // Build count query with same filters
+        let countQuery = supabase
           .from('videos')
           .select('*', { count: 'exact', head: true })
           .eq('channel_id', channelId);
+
+        // Apply same filters to count query
+        if (dateRange) {
+          if (dateRange.startDate) {
+            countQuery = countQuery.gte('published_at', new Date(dateRange.startDate).toISOString());
+          }
+          if (dateRange.endDate) {
+            countQuery = countQuery.lte('published_at', new Date(dateRange.endDate).toISOString());
+          }
+        }
+
+        if (activeFilters.searchQuery && activeFilters.searchQuery.trim()) {
+          const searchTerm = `%${activeFilters.searchQuery.trim()}%`;
+          countQuery = countQuery.or(`title.ilike.${searchTerm},description.ilike.${searchTerm}`);
+        }
+
+        if (activeFilters.typeFilter && activeFilters.typeFilter !== 'all') {
+          countQuery = countQuery.eq('type', activeFilters.typeFilter);
+        }
+
+        const { count } = await countQuery;
 
         setHasMore(prev => ({
           ...prev,
