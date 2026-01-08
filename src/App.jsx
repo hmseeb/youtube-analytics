@@ -584,6 +584,25 @@ function App() {
     }
   };
 
+  // Handle filter changes
+  const handleFilterChange = (newFilters) => {
+    // Update filter state for active channel
+    setFilters(prev => ({
+      ...prev,
+      [activeChannelId]: newFilters
+    }));
+
+    // Reset pagination and reload with new filters
+    setLoadedPages(prev => ({ ...prev, [activeChannelId]: 0 }));
+    loadChannel(activeChannelId, 0, newFilters);
+  };
+
+  // Clear all filters
+  const handleClearFilters = () => {
+    const defaultFilters = getDefaultFilters();
+    handleFilterChange(defaultFilters);
+  };
+
   // Refresh channel from live RSS and save to Supabase
   const refreshChannel = async (channelId) => {
     setLoading(true);
