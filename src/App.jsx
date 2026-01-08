@@ -395,14 +395,45 @@ function App() {
 
   const fetchChannelData = async (channelId) => {
     const response = await fetch(`/api/feed?channelId=${channelId}`);
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || `HTTP ${response.status}`);
     }
-    
+
     const xmlText = await response.text();
     return parseYouTubeRSS(xmlText, channelId);
+  };
+
+  // Calculate date range based on preset or custom dates
+  const calculateDateRange = (dateRange) => {
+    if (dateRange.preset === 'all') {
+      return null;
+    }
+
+    const end = new Date();
+    let start = new Date();
+
+    switch(dateRange.preset) {
+      case '7d':
+        start.setDate(end.getDate() - 7);
+        break;
+      case '30d':
+        start.setDate(end.getDate() - 30);
+        break;
+      case '90d':
+        start.setDate(end.getDate() - 90);
+        break;
+      case 'custom':
+        return {
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate
+        };
+      default:
+        return null;
+    }
+
+    return { startDate: start, endDate: end };
   };
 
   const loadChannel = async (channelId, page = 0) => {
