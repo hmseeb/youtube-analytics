@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import FilterBar from './components/FilterBar';
 
 // ============================================
 // SUPABASE CLIENT
@@ -765,6 +766,14 @@ function App() {
             onSelect={setActiveChannelId}
             onAdd={addChannel}
             onRemove={removeChannel}
+          />
+
+          {/* Add FilterBar here */}
+          <FilterBar
+            filters={getActiveFilters(activeChannelId)}
+            onFilterChange={handleFilterChange}
+            videoCount={videos.length}
+            onClearFilters={handleClearFilters}
           />
         </div>
 
