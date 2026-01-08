@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import FilterBar from './components/FilterBar';
 
@@ -383,10 +383,10 @@ function App() {
     typeFilter: 'all'
   });
 
-  // Get filters for active channel
-  const getActiveFilters = (channelId) => {
-    return filters[channelId] || getDefaultFilters();
-  };
+  // Get filters for active channel (memoized to prevent unnecessary re-renders)
+  const activeFilters = useMemo(() => {
+    return filters[activeChannelId] || getDefaultFilters();
+  }, [filters, activeChannelId]);
 
   // Save channel IDs to localStorage whenever channels change
   useEffect(() => {
@@ -437,7 +437,7 @@ function App() {
     return { startDate: start, endDate: end };
   };
 
-  const loadChannel = async (channelId, page = 0, channelFilters = null) => {
+  const loadChannel = useCallback(async (channelId, page = 0, channelFilters = null) => {
     setLoading(true);
     setError(null);
 
@@ -445,7 +445,7 @@ function App() {
       // If Supabase is configured, try loading from there first
       if (supabase) {
         // Get active filters for this channel
-        const activeFilters = channelFilters || getActiveFilters(channelId);
+        const channelActiveFilters = channelFilters || filters[channelId] || getDefaultFilters();
 
         // Fetch channel info
         const { data: channelData } = await supabase
@@ -465,7 +465,7 @@ function App() {
           .eq('channel_id', channelId);
 
         // Apply date range filter
-        const dateRange = calculateDateRange(activeFilters.dateRange);
+        const dateRange = calculateDateRange(channelActiveFilters.dateRange);
         if (dateRange) {
           if (dateRange.startDate) {
             query = query.gte('published_at', new Date(dateRange.startDate).toISOString());
@@ -476,14 +476,14 @@ function App() {
         }
 
         // Apply search query filter (case-insensitive search in title and description)
-        if (activeFilters.searchQuery && activeFilters.searchQuery.trim()) {
-          const searchTerm = `%${activeFilters.searchQuery.trim()}%`;
+        if (channelActiveFilters.searchQuery && channelActiveFilters.searchQuery.trim()) {
+          const searchTerm = `%${channelActiveFilters.searchQuery.trim()}%`;
           query = query.or(`title.ilike.${searchTerm},description.ilike.${searchTerm}`);
         }
 
         // Apply type filter
-        if (activeFilters.typeFilter && activeFilters.typeFilter !== 'all') {
-          query = query.eq('type', activeFilters.typeFilter);
+        if (channelActiveFilters.typeFilter && channelActiveFilters.typeFilter !== 'all') {
+          query = query.eq('type', channelActiveFilters.typeFilter);
         }
 
         // Apply ordering and pagination
@@ -511,13 +511,13 @@ function App() {
           }
         }
 
-        if (activeFilters.searchQuery && activeFilters.searchQuery.trim()) {
-          const searchTerm = `%${activeFilters.searchQuery.trim()}%`;
+        if (channelActiveFilters.searchQuery && channelActiveFilters.searchQuery.trim()) {
+          const searchTerm = `%${channelActiveFilters.searchQuery.trim()}%`;
           countQuery = countQuery.or(`title.ilike.${searchTerm},description.ilike.${searchTerm}`);
         }
 
-        if (activeFilters.typeFilter && activeFilters.typeFilter !== 'all') {
-          countQuery = countQuery.eq('type', activeFilters.typeFilter);
+        if (channelActiveFilters.typeFilter && channelActiveFilters.typeFilter !== 'all') {
+          countQuery = countQuery.eq('type', channelActiveFilters.typeFilter);
         }
 
         const { count } = await countQuery;
@@ -583,10 +583,10 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, videosPerPage]);
 
-  // Handle filter changes
-  const handleFilterChange = (newFilters) => {
+  // Handle filter changes (memoized to prevent infinite re-renders)
+  const handleFilterChange = useCallback((newFilters) => {
     // Update filter state for active channel
     setFilters(prev => ({
       ...prev,
@@ -596,13 +596,13 @@ function App() {
     // Reset pagination and reload with new filters
     setLoadedPages(prev => ({ ...prev, [activeChannelId]: 0 }));
     loadChannel(activeChannelId, 0, newFilters);
-  };
+  }, [activeChannelId, loadChannel]);
 
-  // Clear all filters
-  const handleClearFilters = () => {
+  // Clear all filters (memoized to prevent infinite re-renders)
+  const handleClearFilters = useCallback(() => {
     const defaultFilters = getDefaultFilters();
     handleFilterChange(defaultFilters);
-  };
+  }, [handleFilterChange]);
 
   // Refresh channel from live RSS and save to Supabase
   const refreshChannel = async (channelId) => {
@@ -693,7 +693,7 @@ function App() {
   // Load active channel data when it changes
   useEffect(() => {
     loadChannel(activeChannelId);
-  }, [activeChannelId]);
+  }, [activeChannelId, loadChannel]);
 
   // Load all stored channels on mount
   useEffect(() => {
@@ -770,7 +770,7 @@ function App() {
 
           {/* Add FilterBar here */}
           <FilterBar
-            filters={getActiveFilters(activeChannelId)}
+            filters={activeFilters}
             onFilterChange={handleFilterChange}
             videoCount={videos.length}
             onClearFilters={handleClearFilters}
