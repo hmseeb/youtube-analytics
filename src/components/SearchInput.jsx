@@ -1,19 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const SearchInput = ({ value, onChange, placeholder = 'Search...' }) => {
   const [localValue, setLocalValue] = useState(value);
+  const onChangeRef = useRef(onChange);
 
+  // Keep ref updated
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  // Sync with prop changes
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
 
+  // Debounced onChange - only call when localValue actually changes
   useEffect(() => {
+    // Only trigger if value is different from prop
+    if (localValue === value) return;
+
     const timer = setTimeout(() => {
-      onChange(localValue);
+      onChangeRef.current(localValue);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [localValue, onChange]);
+  }, [localValue, value]);
 
   const handleClear = () => {
     setLocalValue('');

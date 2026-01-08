@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import SearchInput from './SearchInput';
 import DateRangePicker from './DateRangePicker';
 
@@ -8,17 +8,17 @@ const FilterBar = ({ filters, onFilterChange, videoCount, onClearFilters }) => {
     filters.typeFilter !== 'all' ||
     filters.dateRange.preset !== 'all';
 
-  const handleSearchChange = (query) => {
+  const handleSearchChange = useCallback((query) => {
     onFilterChange({ ...filters, searchQuery: query });
-  };
+  }, [filters, onFilterChange]);
 
-  const handleTypeChange = (type) => {
+  const handleTypeChange = useCallback((type) => {
     onFilterChange({ ...filters, typeFilter: type });
-  };
+  }, [filters, onFilterChange]);
 
-  const handleDateChange = (dateRange) => {
+  const handleDateChange = useCallback((dateRange) => {
     onFilterChange({ ...filters, dateRange });
-  };
+  }, [filters, onFilterChange]);
 
   return (
     <div className="mb-8 animate-slide-in">

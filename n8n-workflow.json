@@ -1,41 +1,23 @@
 {
-  "name": "YouTube RSS to Supabase",
   "nodes": [
     {
       "parameters": {
         "rule": {
           "interval": [
             {
-              "field": "hours",
-              "hoursInterval": 1
+              "field": "hours"
             }
           ]
         }
       },
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "position": [-1400, 0],
+      "position": [
+        -3472,
+        64
+      ],
       "typeVersion": 1.2,
-      "id": "schedule-1"
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "channel1",
-              "name": "channels",
-              "value": "=[\"UC6HBmXVAtwRBkZuaV9Jsubw\", \"UCcxQOPeGruITLHd2knOa3eA\", \"UCuysQYjoOTAcZZPb0-_rCpA\"]",
-              "type": "array"
-            }
-          ]
-        }
-      },
-      "name": "Set Channel IDs",
-      "type": "n8n-nodes-base.set",
-      "position": [-1200, 0],
-      "typeVersion": 3.4,
-      "id": "set-channels"
+      "id": "2d8808d9-ca74-49c9-b6aa-79af4981c098"
     },
     {
       "parameters": {
@@ -44,9 +26,12 @@
       },
       "name": "Loop Channels",
       "type": "n8n-nodes-base.splitOut",
-      "position": [-1000, 0],
+      "position": [
+        -3072,
+        64
+      ],
       "typeVersion": 1,
-      "id": "split-channels"
+      "id": "122ee140-ec85-4df0-9dcd-29582c8a2d0f"
     },
     {
       "parameters": {
@@ -61,19 +46,25 @@
       },
       "name": "Fetch RSS",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [-800, 0],
+      "position": [
+        -2864,
+        64
+      ],
       "typeVersion": 4.1,
-      "id": "fetch-rss"
+      "id": "6c2429c2-1765-458e-97eb-a71a3ad908c6"
     },
     {
       "parameters": {
-        "jsCode": "const xml = $input.first().json.data;\nconst channelIdMatch = $input.first().json.url?.match(/channel_id=([^&]+)/);\nconst channelId = channelIdMatch ? channelIdMatch[1] : '';\n\n// Parse XML manually\nconst getTagContent = (xml, tag) => {\n  const regex = new RegExp(`<${tag}[^>]*>([\\\\s\\\\S]*?)</${tag}>`, 'g');\n  const matches = [];\n  let match;\n  while ((match = regex.exec(xml)) !== null) {\n    matches.push(match[1]);\n  }\n  return matches;\n};\n\nconst getAttr = (xml, tag, attr) => {\n  const regex = new RegExp(`<${tag}[^>]*${attr}=\"([^\"]*)\"`, 'i');\n  const match = xml.match(regex);\n  return match ? match[1] : '';\n};\n\n// Get channel name\nconst channelName = getTagContent(xml, 'title')[0] || 'Unknown Channel';\n\n// Get all entries\nconst entryRegex = /<entry>([\\s\\S]*?)<\\/entry>/g;\nconst entries = [];\nlet entryMatch;\nwhile ((entryMatch = entryRegex.exec(xml)) !== null) {\n  entries.push(entryMatch[1]);\n}\n\nconst results = [];\n\nfor (const entry of entries) {\n  const videoId = getTagContent(entry, 'yt:videoId')[0] || '';\n  const title = getTagContent(entry, 'title')[0] || '';\n  const published = getTagContent(entry, 'published')[0] || '';\n  const description = getTagContent(entry, 'media:description')[0] || '';\n  const thumbnail = getAttr(entry, 'media:thumbnail', 'url') || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;\n  const views = parseInt(getAttr(entry, 'media:statistics', 'views') || '0');\n  const likes = parseInt(getAttr(entry, 'media:starRating', 'count') || '0');\n  \n  const link = `https://www.youtube.com/watch?v=${videoId}`;\n  const isShort = title.includes('#') || description.length < 100;\n  \n  results.push({\n    json: {\n      id: videoId,\n      channel_id: channelId,\n      channel_name: channelName,\n      title: title,\n      description: description.substring(0, 1000),\n      published_at: published,\n      thumbnail: thumbnail,\n      link: link,\n      type: isShort ? 'short' : 'video',\n      views: views,\n      likes: likes,\n      last_updated: new Date().toISOString()\n    }\n  });\n}\n\nreturn results;"
+        "jsCode": "// Process ALL items from all 3 channels\nconst allResults = [];\n\nfor (const item of $input.all()) {\n  const xml = item.json.data;\n  \n  // Parse XML manually\n  const getTagContent = (xml, tag) => {\n    const regex = new RegExp(`<${tag}[^>]*>([\\\\s\\\\S]*?)</${tag}>`, 'g');\n    const matches = [];\n    let match;\n    while ((match = regex.exec(xml)) !== null) {\n      matches.push(match[1]);\n    }\n    return matches;\n  };\n\n  const getAttr = (xml, tag, attr) => {\n    const regex = new RegExp(`<${tag}[^>]*${attr}=\"([^\"]*)\"`, 'i');\n    const match = xml.match(regex);\n    return match ? match[1] : '';\n  };\n\n  // Get channel ID from XML (yt:channelId tag)\n  const channelIdMatch = xml.match(/<yt:channelId>([^<]+)<\\/yt:channelId>/);\n  let channelId = channelIdMatch ? channelIdMatch[1] : '';\n  // YouTube RSS strips \"UC\" prefix, add it back if missing\n  if (channelId && !channelId.startsWith('UC')) {\n    channelId = 'UC' + channelId;\n  }\n  \n  // Get channel name\n  const channelName = getTagContent(xml, 'title')[0] || 'Unknown Channel';\n\n  // Get all entries\n  const entryRegex = /<entry>([\\s\\S]*?)<\\/entry>/g;\n  const entries = [];\n  let entryMatch;\n  while ((entryMatch = entryRegex.exec(xml)) !== null) {\n    entries.push(entryMatch[1]);\n  }\n\n  for (const entry of entries) {\n    const videoId = getTagContent(entry, 'yt:videoId')[0] || '';\n    const title = getTagContent(entry, 'title')[0] || '';\n    const published = getTagContent(entry, 'published')[0] || '';\n    const description = getTagContent(entry, 'media:description')[0] || '';\n    const thumbnail = getAttr(entry, 'media:thumbnail', 'url') || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;\n    const views = parseInt(getAttr(entry, 'media:statistics', 'views') || '0');\n    const likes = parseInt(getAttr(entry, 'media:starRating', 'count') || '0');\n    \n    const link = `https://www.youtube.com/watch?v=${videoId}`;\n    const isShort = title.includes('#') || description.length < 100;\n    \n    if (videoId && channelId) {\n      allResults.push({\n        json: {\n          id: videoId,\n          channel_id: channelId,\n          channel_name: channelName,\n          title: title,\n          description: description.substring(0, 1000),\n          published_at: published,\n          thumbnail: thumbnail,\n          link: link,\n          type: isShort ? 'short' : 'video',\n          views: views,\n          likes: likes,\n          last_updated: new Date().toISOString()\n        }\n      });\n    }\n  }\n}\n\nconsole.log(`Processed ${allResults.length} videos`);\nreturn allResults;"
       },
       "name": "Parse RSS XML",
       "type": "n8n-nodes-base.code",
-      "position": [-600, 0],
+      "position": [
+        -2672,
+        64
+      ],
       "typeVersion": 2,
-      "id": "parse-xml"
+      "id": "0493be12-8a4e-4943-a47f-e75a3436094f"
     },
     {
       "parameters": {
@@ -107,9 +98,12 @@
       },
       "name": "Upsert Channel",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [-400, -100],
+      "position": [
+        -2464,
+        -48
+      ],
       "typeVersion": 4.1,
-      "id": "upsert-channel"
+      "id": "14b3ca8d-4acb-4fa4-bf8f-54ab9b4147e0"
     },
     {
       "parameters": {
@@ -143,9 +137,35 @@
       },
       "name": "Upsert Video",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [-400, 100],
+      "position": [
+        -2464,
+        160
+      ],
       "typeVersion": 4.1,
-      "id": "upsert-video"
+      "id": "a9d878dc-bf86-476d-a83b-cd8cacb22e36"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "channel1",
+              "name": "channels",
+              "value": "=[\"UC6HBmXVAtwRBkZuaV9Jsubw\", \"UCcxQOPeGruITLHd2knOa3eA\", \"UCuysQYjoOTAcZZPb0-_rCpA\"]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Set Channel IDs",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -3264,
+        64
+      ],
+      "typeVersion": 3.4,
+      "id": "22547384-6276-402a-a395-96bb42d56d41"
     }
   ],
   "connections": {
@@ -154,17 +174,6 @@
         [
           {
             "node": "Set Channel IDs",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Set Channel IDs": {
-      "main": [
-        [
-          {
-            "node": "Loop Channels",
             "type": "main",
             "index": 0
           }
@@ -208,10 +217,22 @@
           }
         ]
       ]
+    },
+    "Set Channel IDs": {
+      "main": [
+        [
+          {
+            "node": "Loop Channels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
   "meta": {
-    "templateCredsSetupCompleted": true
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3ffb07b1063f972003cabe667972c80398bade210f4d0789e6725b054f3f4c7a"
   }
 }
