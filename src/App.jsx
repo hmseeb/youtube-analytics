@@ -547,7 +547,7 @@ function App() {
 
   // Load more videos (pagination)
   const loadMoreVideos = () => {
-    const currentPage = loadedPages[activeChannelId] || 1;
+    const currentPage = loadedPages[activeChannelId] || 0;
     loadChannel(activeChannelId, currentPage);
   };
 
@@ -700,25 +700,8 @@ function App() {
                   </svg>
                   View Channel
                 </a>
-                <button
-                  onClick={() => refreshChannel(activeChannelId)}
-                  disabled={loading}
-                  className="px-4 py-2 bg-accent-cyan/20 border border-accent-cyan/30 rounded-lg text-sm text-accent-cyan hover:bg-accent-cyan/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={loading ? 'animate-spin' : ''}>
-                    <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                  </svg>
-                  {loading ? 'Refreshing...' : 'Refresh Now'}
-                </button>
               </div>
             </div>
-
-            {/* Last Updated Indicator */}
-            {lastUpdated && (
-              <div className="mb-4 text-xs text-gray-500 font-mono">
-                Last synced: {new Date(lastUpdated).toLocaleString()}
-              </div>
-            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-5 gap-4 mb-10">
@@ -770,7 +753,13 @@ function App() {
                   🏆 Top Performers
                 </h3>
                 {topVideos.slice(0, 4).map((video, i) => (
-                  <div key={video.id} className={`flex items-center gap-3 py-2 ${i < 3 ? 'border-b border-white/5' : ''}`}>
+                  <a
+                    key={video.id}
+                    href={video.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex items-center gap-3 py-2 hover:bg-white/5 rounded-lg transition-colors no-underline ${i < 3 ? 'border-b border-white/5' : ''}`}
+                  >
                     <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold text-black flex-shrink-0 ${
                       i === 0 ? 'bg-accent-gold' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-amber-600' : 'bg-gray-600'
                     }`}>
@@ -785,7 +774,7 @@ function App() {
                     <div className="text-sm font-semibold text-accent-cyan font-mono">
                       {video.views.toLocaleString()}
                     </div>
-                  </div>
+                  </a>
                 ))}
               </div>
             </div>
