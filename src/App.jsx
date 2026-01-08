@@ -693,7 +693,8 @@ function App() {
   // Load active channel data when it changes
   useEffect(() => {
     loadChannel(activeChannelId);
-  }, [activeChannelId, loadChannel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChannelId]);
 
   // Load all stored channels on mount
   useEffect(() => {
