@@ -372,6 +372,21 @@ function App() {
   const [hasMore, setHasMore] = useState({});          // { channelId: boolean }
   const [lastUpdated, setLastUpdated] = useState(null); // Last refresh timestamp
 
+  // Filter state (per channel)
+  const [filters, setFilters] = useState({});
+
+  // Get default filters
+  const getDefaultFilters = () => ({
+    dateRange: { preset: 'all', startDate: null, endDate: null },
+    searchQuery: '',
+    typeFilter: 'all'
+  });
+
+  // Get filters for active channel
+  const getActiveFilters = (channelId) => {
+    return filters[channelId] || getDefaultFilters();
+  };
+
   // Save channel IDs to localStorage whenever channels change
   useEffect(() => {
     const channelIds = channels.map(ch => ch.id);
